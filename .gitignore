@@ -1,0 +1,15 @@
+# 真实配置文件（含密钥），不提交
+configs/config.yaml
+
+# Go workspace（本地开发用，不属于项目）
+go.work
+go.work.sum
+
+# 编译产物
+*.exe
+*.out
+/bin/
+
+# IDE
+.idea/
+.vscode/

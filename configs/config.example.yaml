@@ -1,0 +1,20 @@
+server:
+  port: 8080
+
+upstream:
+  models:
+    - name: deepseek
+      base_url: "https://api.deepseek.com"
+      api_key: "your-deepseek-api-key"
+      model: "deepseek-chat"
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+mysql:
+  dsn: "root:password@tcp(localhost:3306)/ai_gateway?charset=utf8mb4&parseTime=True&loc=Local"
+
+jwt:
+  secret: "your-jwt-secret-change-in-production"
