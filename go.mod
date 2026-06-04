@@ -3,6 +3,7 @@ module ai-gateway
 go 1.25.0
 
 require (
+	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/goccy/go-json v0.10.6

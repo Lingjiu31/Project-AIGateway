@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Gateway · Test Console</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: 13px;
+      min-height: 100vh;
+      padding: 32px;
+    }
+
+    h1 {
+      color: #58a6ff;
+      font-size: 16px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 32px;
+      border-bottom: 1px solid #21262d;
+      padding-bottom: 12px;
+    }
+
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .panel {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 20px;
+    }
+
+    .panel h2 {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #8b949e;
+      margin-bottom: 16px;
+    }
+
+    .panel.chat {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      display: block;
+      color: #8b949e;
+      font-size: 11px;
+      margin-bottom: 4px;
+      margin-top: 12px;
+    }
+
+    label:first-of-type { margin-top: 0; }
+
+    input, textarea {
+      width: 100%;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #c9d1d9;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px 10px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus, textarea:focus {
+      border-color: #58a6ff;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 72px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 14px;
+    }
+
+    button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #c9d1d9;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      padding: 7px 16px;
+      transition: background 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+
+    button:hover { background: #30363d; border-color: #8b949e; }
+    button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+    button.primary:hover { background: #388bfd; border-color: #388bfd; }
+
+    .status {
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+      display: none;
+    }
+    .status.ok  { background: #0f2a1a; color: #3fb950; border: 1px solid #1a4c2a; display: block; }
+    .status.err { background: #2a0f0f; color: #f85149; border: 1px solid #4c1a1a; display: block; }
+
+    .token-bar {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 11px;
+      color: #8b949e;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .token-bar span { color: #3fb950; word-break: break-all; flex: 1; }
+
+    .output {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 4px;
+      min-height: 120px;
+      max-height: 320px;
+      overflow-y: auto;
+      padding: 12px;
+      margin-top: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      color: #c9d1d9;
+    }
+
+    .output .thinking { color: #8b949e; font-style: italic; }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      color: #8b949e;
+      font-size: 12px;
+    }
+
+    input[type="checkbox"] {
+      width: auto;
+      accent-color: #58a6ff;
+    }
+  </style>
+</head>
+<body>
+
+<h1>AI Gateway · Test Console</h1>
+
+<!-- token 状态栏 -->
+<div class="token-bar">
+  <span id="tokenDisplay">未登录 · 暂无 Token</span>
+  <button onclick="clearToken()">清除</button>
+</div>
+
+<div class="panels">
+
+  <!-- 注册 -->
+  <div class="panel">
+    <h2>Register</h2>
+    <label>Username</label>
+    <input id="regUser" type="text" placeholder="alice">
+    <label>Password</label>
+    <input id="regPass" type="password" placeholder="••••••">
+    <div class="row">
+      <button class="primary" onclick="register()">注册</button>
+    </div>
+    <div id="regStatus" class="status"></div>
+  </div>
+
+  <!-- 登录 -->
+  <div class="panel">
+    <h2>Login</h2>
+    <label>Username</label>
+    <input id="loginUser" type="text" placeholder="alice">
+    <label>Password</label>
+    <input id="loginPass" type="password" placeholder="••••••">
+    <div class="row">
+      <button class="primary" onclick="login()">登录</button>
+    </div>
+    <div id="loginStatus" class="status"></div>
+  </div>
+
+  <!-- 对话 -->
+  <div class="panel chat">
+    <h2>Chat · /v1/chat/completions</h2>
+    <label>Message</label>
+    <textarea id="chatMsg" placeholder="你好，请介绍一下自己"></textarea>
+    <div class="checkbox-row">
+      <input type="checkbox" id="streamToggle" checked>
+      <label style="margin:0">Stream（SSE 流式）</label>
+    </div>
+    <div class="row">
+      <button class="primary" onclick="chat()">发送</button>
+      <button onclick="clearOutput()">清空</button>
+    </div>
+    <div id="chatOutput" class="output"><span class="thinking">等待发送...</span></div>
+  </div>
+
+</div>
+
+<script>
+  const BASE = 'http://localhost:8080'
+  let token = ''
+
+  function setStatus(id, msg, ok) {
+    const el = document.getElementById(id)
+    el.textContent = msg
+    el.className = 'status ' + (ok ? 'ok' : 'err')
+  }
+
+  function setToken(t) {
+    token = t
+    const el = document.getElementById('tokenDisplay')
+    el.textContent = t ? '✓ ' + t.slice(0, 40) + '...' : '未登录 · 暂无 Token'
+  }
+
+  function clearToken() {
+    setToken('')
+  }
+
+  async function register() {
+    const username = document.getElementById('regUser').value.trim()
+    const password = document.getElementById('regPass').value
+    if (!username || !password) return setStatus('regStatus', '请填写用户名和密码', false)
+
+    try {
+      const res = await fetch(`${BASE}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setStatus('regStatus', `✓ 注册成功 · id: ${data.id}  username: ${data.username}`, true)
+      } else {
+        setStatus('regStatus', `✗ ${data.error}`, false)
+      }
+    } catch (e) {
+      setStatus('regStatus', `✗ 请求失败: ${e.message}`, false)
+    }
+  }
+
+  async function login() {
+    const username = document.getElementById('loginUser').value.trim()
+    const password = document.getElementById('loginPass').value
+    if (!username || !password) return setStatus('loginStatus', '请填写用户名和密码', false)
+
+    try {
+      const res = await fetch(`${BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setToken(data.token)
+        setStatus('loginStatus', '✓ 登录成功，Token 已保存', true)
+      } else {
+        setStatus('loginStatus', `✗ ${data.error}`, false)
+      }
+    } catch (e) {
+      setStatus('loginStatus', `✗ 请求失败: ${e.message}`, false)
+    }
+  }
+
+  async function chat() {
+    if (!token) {
+      document.getElementById('chatOutput').textContent = '✗ 请先登录获取 Token'
+      return
+    }
+    const msg = document.getElementById('chatMsg').value.trim()
+    if (!msg) return
+    const stream = document.getElementById('streamToggle').checked
+    const output = document.getElementById('chatOutput')
+    output.textContent = ''
+
+    const body = {
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: msg }],
+      stream
+    }
+
+    try {
+      const res = await fetch(`${BASE}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        output.textContent = `✗ ${res.status} ${data.error || ''}`
+        return
+      }
+
+      if (!stream) {
+        const data = await res.json()
+        output.textContent = data.choices?.[0]?.message?.content ?? JSON.stringify(data, null, 2)
+        return
+      }
+
+      // SSE 流式
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value)
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue
+          const payload = line.slice(6).trim()
+          if (payload === '[DONE]') break
+          try {
+            const json = JSON.parse(payload)
+            const delta = json.choices?.[0]?.delta?.content
+            if (delta) output.textContent += delta
+          } catch {}
+        }
+      }
+    } catch (e) {
+      output.textContent = `✗ 请求失败: ${e.message}`
+    }
+  }
+
+  function clearOutput() {
+    document.getElementById('chatOutput').innerHTML = '<span class="thinking">等待发送...</span>'
+  }
+</script>
+
+</body>
+</html>
