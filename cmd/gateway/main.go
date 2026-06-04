@@ -1,6 +1,8 @@
 package main
 
 import (
+	"ai-gateway/internal/auth"
+	"ai-gateway/internal/middleware"
 	"ai-gateway/internal/proxy"
 	"fmt"
 	"net/http"
@@ -26,9 +28,10 @@ func main() {
 
 func setupRoutes(r *gin.Engine, cfg *config.Config) {
 	handler := proxy.NewHandler(cfg.Upstream.Models[0])
+	manager := auth.NewManager(cfg.JWT.Secret)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
-	r.POST("/v1/chat/completions", handler.Handle)
+	r.POST("/v1/chat/completions", middleware.Auth(manager), handler.Handle)
 }
