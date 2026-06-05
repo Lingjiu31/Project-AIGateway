@@ -18,3 +18,7 @@ mysql:
 
 jwt:
   secret: "your-jwt-secret-change-in-production"
+
+ratelimit:
+  rate: 10
+  burst: 20   

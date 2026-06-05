@@ -7,11 +7,12 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Upstream UpstreamConfig `mapstructure:"upstream"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	MySQL    MySQLConfig    `mapstructure:"mysql"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Upstream  UpstreamConfig  `mapstructure:"upstream"`
+	Redis     RedisConfig     `mapstructure:"redis"`
+	MySQL     MySQLConfig     `mapstructure:"mysql"`
+	JWT       JWTConfig       `mapstructure:"jwt"`
+	RateLimit RateLimitConfig `mapstructure:"ratelimit"`
 }
 
 type ServerConfig struct {
@@ -43,10 +44,15 @@ type JWTConfig struct {
 	Secret string `mapstructure:"secret"`
 }
 
+type RateLimitConfig struct {
+	Rate  float64 `mapstructure:"rate"`  // 每秒补充多少令牌
+	Burst int     `mapstructure:"burst"` // 桶容量上限
+}
+
 // Load 从指定路径加载配置文件，支持环境变量覆盖
 func Load(path string) (*Config, error) {
 	viper.SetConfigFile(path)
-	viper.AutomaticEnv() // 允许环境变量覆盖，如 SERVER_PORT 覆盖 server.port
+	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
