@@ -14,7 +14,7 @@ import (
 )
 
 func setupRoutes(r *gin.Engine, manager *auth.Manager,
-	handler *proxy.Handler, userHandler *user.Handler) {
+	handler *proxy.Handler, userHandler *user.Handler, limiter middleware.Limiter) {
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:  []string{"*"},
@@ -28,7 +28,11 @@ func setupRoutes(r *gin.Engine, manager *auth.Manager,
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
-	r.POST("/v1/chat/completions", middleware.Auth(manager), handler.Handle)
+	r.POST("/v1/chat/completions",
+		middleware.Auth(manager),
+		middleware.RateLimit(limiter),
+		handler.Handle,
+	)
 	r.POST("/register", userHandler.Register)
 	r.POST("/login", userHandler.Login)
 }
