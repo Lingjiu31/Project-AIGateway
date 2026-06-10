@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"ai-gateway/internal/router"
 	"bytes"
 	"fmt"
 	"io"
@@ -14,14 +15,14 @@ import (
 )
 
 type Handler struct {
-	client   *http.Client
-	upstream config.ModelConfig
+	client *http.Client
+	router *router.Router
 }
 
-func NewHandler(upstream config.ModelConfig) *Handler {
+func NewHandler(r *router.Router) *Handler {
 	return &Handler{
-		client:   &http.Client{Timeout: 60 * time.Second},
-		upstream: upstream,
+		client: &http.Client{Timeout: 60 * time.Second},
+		router: r,
 	}
 }
 
@@ -33,13 +34,27 @@ func (h *Handler) Handle(ctx *gin.Context) {
 		return
 	}
 	var meta struct {
-		Stream bool `json:"stream"`
+		Model  string `json:"model"`
+		Stream bool   `json:"stream"`
 	}
 	// 解析失败就当做 false
 	_ = json.Unmarshal(body, &meta)
 
+	// 查看是否选择了模型
+	model, cb, err := h.router.Get(meta.Model)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !cb.Allow() {
+		// 提示用户切换模型
+		ctx.JSON(http.StatusServiceUnavailable, gin.H{"error": "模型熔断"})
+		return
+	}
+
 	// 构建上游请求
-	req, err := h.buildRequest(ctx, body)
+	req, err := buildRequest(ctx, body, model)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("build request: %v", err)})
 		return
@@ -47,23 +62,30 @@ func (h *Handler) Handle(ctx *gin.Context) {
 	// 转发响应, 等待响应
 	resp, err := h.client.Do(req)
 	if err != nil {
+		// 连不上模型
+		cb.ReportFailure()
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("upstream: %v", err)})
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		cb.ReportFailure() // 上游返回 5xx，算上游故障
+	} else {
+		cb.ReportSuccess() // 正常响应
+	}
 	forwardResponse(ctx, resp, meta.Stream)
 }
 
 // 构建上游请求
-func (h *Handler) buildRequest(ctx *gin.Context, body []byte) (*http.Request, error) {
-	targetURL := h.upstream.BaseURL + ctx.Request.URL.Path
+func buildRequest(ctx *gin.Context, body []byte, model config.ModelConfig) (*http.Request, error) {
+	targetURL := model.BaseURL + ctx.Request.URL.Path
 	req, err := http.NewRequestWithContext(ctx.Request.Context(),
 		ctx.Request.Method, targetURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	copyHeaders(req.Header, ctx.Request.Header)
-	req.Header.Set("Authorization", "Bearer "+h.upstream.APIKey)
+	req.Header.Set("Authorization", "Bearer "+model.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 	return req, nil
 }

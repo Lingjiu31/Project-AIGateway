@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ai-gateway/internal/router"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
@@ -42,7 +43,8 @@ func main() {
 	}
 	defer rdb.Close()
 
-	handler := proxy.NewHandler(cfg.Upstream.Models[0])
+	rt := router.NewRouter(cfg.Upstream.Models, cfg.CircuitBreaker)
+	handler := proxy.NewHandler(rt)
 	manager := auth.NewManager(cfg.JWT.Secret)
 	store := user.NewStore(gormDB)
 	userHandler := user.NewHandler(store, manager)
