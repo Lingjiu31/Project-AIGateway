@@ -7,12 +7,13 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig    `mapstructure:"server"`
-	Upstream  UpstreamConfig  `mapstructure:"upstream"`
-	Redis     RedisConfig     `mapstructure:"redis"`
-	MySQL     MySQLConfig     `mapstructure:"mysql"`
-	JWT       JWTConfig       `mapstructure:"jwt"`
-	RateLimit RateLimitConfig `mapstructure:"ratelimit"`
+	Server         ServerConfig         `mapstructure:"server"`
+	Upstream       UpstreamConfig       `mapstructure:"upstream"`
+	Redis          RedisConfig          `mapstructure:"redis"`
+	MySQL          MySQLConfig          `mapstructure:"mysql"`
+	JWT            JWTConfig            `mapstructure:"jwt"`
+	RateLimit      RateLimitConfig      `mapstructure:"ratelimit"`
+	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
 }
 
 type ServerConfig struct {
@@ -45,8 +46,13 @@ type JWTConfig struct {
 }
 
 type RateLimitConfig struct {
-	Rate  float64 `mapstructure:"rate"`  // 每秒补充多少令牌
-	Burst int     `mapstructure:"burst"` // 桶容量上限
+	Rate  float64 `mapstructure:"rate"`
+	Burst int     `mapstructure:"burst"`
+}
+
+type CircuitBreakerConfig struct {
+	MaxFailures    int `mapstructure:"max_failures"`    // 连续失败几次触发熔断
+	TimeoutSeconds int `mapstructure:"timeout_seconds"` // 熔断后等多少秒进入 HalfOpen
 }
 
 // Load 从指定路径加载配置文件，支持环境变量覆盖
