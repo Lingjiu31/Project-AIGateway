@@ -86,10 +86,21 @@ func (h *Handler) Handle(ctx *gin.Context) {
 }
 
 // 构建上游请求
+// 将 body 中的 model 字段替换为上游真实模型名，屏蔽网关内部命名
 func buildRequest(ctx *gin.Context, body []byte, model config.ModelConfig) (*http.Request, error) {
+	var bodyMap map[string]any
+	if err := json.Unmarshal(body, &bodyMap); err != nil {
+		return nil, fmt.Errorf("parse body: %w", err)
+	}
+	bodyMap["model"] = model.Model
+	newBody, err := json.Marshal(bodyMap)
+	if err != nil {
+		return nil, fmt.Errorf("marshal body: %w", err)
+	}
+
 	targetURL := model.BaseURL + ctx.Request.URL.Path
 	req, err := http.NewRequestWithContext(ctx.Request.Context(),
-		ctx.Request.Method, targetURL, bytes.NewReader(body))
+		ctx.Request.Method, targetURL, bytes.NewReader(newBody))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

@@ -47,9 +47,7 @@
       margin-bottom: 16px;
     }
 
-    .panel.chat {
-      grid-column: 1 / -1;
-    }
+    .panel.chat { grid-column: 1 / -1; }
 
     label {
       display: block;
@@ -61,7 +59,7 @@
 
     label:first-of-type { margin-top: 0; }
 
-    input, textarea {
+    input, textarea, select {
       width: 100%;
       background: #0d1117;
       border: 1px solid #30363d;
@@ -74,14 +72,11 @@
       transition: border-color 0.15s;
     }
 
-    input:focus, textarea:focus {
-      border-color: #58a6ff;
-    }
+    input:focus, textarea:focus, select:focus { border-color: #58a6ff; }
 
-    textarea {
-      resize: vertical;
-      min-height: 72px;
-    }
+    select option { background: #161b22; }
+
+    textarea { resize: vertical; min-height: 72px; }
 
     .row {
       display: flex;
@@ -106,6 +101,8 @@
     button:hover { background: #30363d; border-color: #8b949e; }
     button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
     button.primary:hover { background: #388bfd; border-color: #388bfd; }
+    button.danger { background: #6e1919; border-color: #6e1919; color: #fff; }
+    button.danger:hover { background: #9a2020; }
 
     .status {
       font-size: 11px;
@@ -129,25 +126,41 @@
       align-items: center;
       gap: 8px;
     }
-
     .token-bar span { color: #3fb950; word-break: break-all; flex: 1; }
 
-    .output {
+    /* 对话区 */
+    .conversation {
       background: #0d1117;
       border: 1px solid #21262d;
       border-radius: 4px;
-      min-height: 120px;
-      max-height: 320px;
+      min-height: 200px;
+      max-height: 420px;
       overflow-y: auto;
       padding: 12px;
       margin-top: 12px;
-      font-size: 13px;
-      line-height: 1.6;
-      white-space: pre-wrap;
-      color: #c9d1d9;
     }
 
-    .output .thinking { color: #8b949e; font-style: italic; }
+    .msg {
+      margin-bottom: 14px;
+      line-height: 1.6;
+    }
+
+    .msg-label {
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .msg.user .msg-label  { color: #58a6ff; }
+    .msg.ai   .msg-label  { color: #3fb950; }
+    .msg.err  .msg-label  { color: #f85149; }
+
+    .msg.user .msg-body { color: #c9d1d9; }
+    .msg.ai   .msg-body { color: #e6edf3; white-space: pre-wrap; }
+    .msg.err  .msg-body { color: #f85149; }
+
+    .streaming { border-left: 2px solid #3fb950; padding-left: 8px; }
 
     .checkbox-row {
       display: flex;
@@ -157,10 +170,18 @@
       color: #8b949e;
       font-size: 12px;
     }
+    input[type="checkbox"] { width: auto; accent-color: #58a6ff; }
 
-    input[type="checkbox"] {
-      width: auto;
-      accent-color: #58a6ff;
+    .model-tag {
+      display: inline-block;
+      background: #1c2d3a;
+      border: 1px solid #1f6feb44;
+      border-radius: 3px;
+      color: #58a6ff;
+      font-size: 10px;
+      padding: 1px 6px;
+      margin-left: 6px;
+      vertical-align: middle;
     }
   </style>
 </head>
@@ -168,7 +189,6 @@
 
 <h1>AI Gateway · Test Console</h1>
 
-<!-- token 状态栏 -->
 <div class="token-bar">
   <span id="tokenDisplay">未登录 · 暂无 Token</span>
   <button onclick="clearToken()">清除</button>
@@ -205,17 +225,31 @@
   <!-- 对话 -->
   <div class="panel chat">
     <h2>Chat · /v1/chat/completions</h2>
+
+    <label>Model</label>
+    <select id="modelSelect">
+      <option value="deepseek-flash">deepseek-flash · V4 Flash（快速省钱）</option>
+      <option value="deepseek-pro">deepseek-pro · V4 Pro（推理最强）</option>
+      <option value="glm">glm · GLM-5（Agent 任务）</option>
+      <option value="fake-broken">fake-broken · 测试熔断用</option>
+    </select>
+
     <label>Message</label>
-    <textarea id="chatMsg" placeholder="你好，请介绍一下自己"></textarea>
+    <textarea id="chatMsg" placeholder="你好，请介绍一下自己" onkeydown="handleKey(event)"></textarea>
+
     <div class="checkbox-row">
       <input type="checkbox" id="streamToggle" checked>
       <label style="margin:0">Stream（SSE 流式）</label>
     </div>
+
     <div class="row">
-      <button class="primary" onclick="chat()">发送</button>
-      <button onclick="clearOutput()">清空</button>
+      <button class="primary" onclick="chat()">发送 (Enter)</button>
+      <button onclick="clearConversation()" class="danger">清空对话</button>
     </div>
-    <div id="chatOutput" class="output"><span class="thinking">等待发送...</span></div>
+
+    <div id="conversation" class="conversation">
+      <div style="color:#8b949e;font-size:11px;">选择模型，输入消息，开始对话...</div>
+    </div>
   </div>
 
 </div>
@@ -223,6 +257,15 @@
 <script>
   const BASE = 'http://localhost:8080'
   let token = ''
+  let messages = []   // 多轮对话历史
+
+  // Enter 发送（Shift+Enter 换行）
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      chat()
+    }
+  }
 
   function setStatus(id, msg, ok) {
     const el = document.getElementById(id)
@@ -232,19 +275,51 @@
 
   function setToken(t) {
     token = t
-    const el = document.getElementById('tokenDisplay')
-    el.textContent = t ? '✓ ' + t.slice(0, 40) + '...' : '未登录 · 暂无 Token'
+    document.getElementById('tokenDisplay').textContent =
+      t ? '✓ ' + t.slice(0, 40) + '...' : '未登录 · 暂无 Token'
   }
 
-  function clearToken() {
-    setToken('')
+  function clearToken() { setToken('') }
+
+  function appendMsg(role, content, modelName) {
+    const conv = document.getElementById('conversation')
+    // 清除占位文字
+    if (conv.querySelector('[data-placeholder]')) conv.innerHTML = ''
+
+    const div = document.createElement('div')
+    div.className = 'msg ' + role
+
+    const label = document.createElement('div')
+    label.className = 'msg-label'
+    if (role === 'user') label.textContent = 'You'
+    else if (role === 'ai') {
+      label.innerHTML = 'AI' + (modelName ? `<span class="model-tag">${modelName}</span>` : '')
+    } else {
+      label.textContent = 'Error'
+    }
+
+    const body = document.createElement('div')
+    body.className = 'msg-body'
+    if (role === 'ai') body.classList.add('streaming')
+    body.textContent = content
+
+    div.appendChild(label)
+    div.appendChild(body)
+    conv.appendChild(div)
+    conv.scrollTop = conv.scrollHeight
+    return body  // 返回 body 元素，流式时可追加内容
+  }
+
+  function clearConversation() {
+    messages = []
+    document.getElementById('conversation').innerHTML =
+      '<div style="color:#8b949e;font-size:11px;">对话已清空，开始新对话...</div>'
   }
 
   async function register() {
     const username = document.getElementById('regUser').value.trim()
     const password = document.getElementById('regPass').value
     if (!username || !password) return setStatus('regStatus', '请填写用户名和密码', false)
-
     try {
       const res = await fetch(`${BASE}/register`, {
         method: 'POST',
@@ -252,13 +327,11 @@
         body: JSON.stringify({ username, password })
       })
       const data = await res.json()
-      if (res.ok) {
-        setStatus('regStatus', `✓ 注册成功 · id: ${data.id}  username: ${data.username}`, true)
-      } else {
-        setStatus('regStatus', `✗ ${data.error}`, false)
-      }
+      res.ok
+        ? setStatus('regStatus', `✓ 注册成功 · ${data.username}`, true)
+        : setStatus('regStatus', `✗ ${data.error}`, false)
     } catch (e) {
-      setStatus('regStatus', `✗ 请求失败: ${e.message}`, false)
+      setStatus('regStatus', `✗ ${e.message}`, false)
     }
   }
 
@@ -266,7 +339,6 @@
     const username = document.getElementById('loginUser').value.trim()
     const password = document.getElementById('loginPass').value
     if (!username || !password) return setStatus('loginStatus', '请填写用户名和密码', false)
-
     try {
       const res = await fetch(`${BASE}/login`, {
         method: 'POST',
@@ -281,26 +353,28 @@
         setStatus('loginStatus', `✗ ${data.error}`, false)
       }
     } catch (e) {
-      setStatus('loginStatus', `✗ 请求失败: ${e.message}`, false)
+      setStatus('loginStatus', `✗ ${e.message}`, false)
     }
   }
 
   async function chat() {
     if (!token) {
-      document.getElementById('chatOutput').textContent = '✗ 请先登录获取 Token'
+      appendMsg('err', '请先登录获取 Token')
       return
     }
     const msg = document.getElementById('chatMsg').value.trim()
     if (!msg) return
-    const stream = document.getElementById('streamToggle').checked
-    const output = document.getElementById('chatOutput')
-    output.textContent = ''
 
-    const body = {
-      model: 'deepseek-chat',
-      messages: [{ role: 'user', content: msg }],
-      stream
-    }
+    const modelName = document.getElementById('modelSelect').value
+    const stream = document.getElementById('streamToggle').checked
+
+    // 加入历史，显示用户消息
+    messages.push({ role: 'user', content: msg })
+    appendMsg('user', msg)
+    document.getElementById('chatMsg').value = ''
+
+    // AI 回复占位
+    const aiBody = appendMsg('ai', '', modelName)
 
     try {
       const res = await fetch(`${BASE}/v1/chat/completions`, {
@@ -309,24 +383,32 @@
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ model: modelName, messages, stream })
       })
 
       if (!res.ok) {
         const data = await res.json()
-        output.textContent = `✗ ${res.status} ${data.error || ''}`
+        aiBody.closest('.msg').className = 'msg err'
+        aiBody.closest('.msg').querySelector('.msg-label').textContent = 'Error'
+        aiBody.textContent = `${res.status} · ${data.error || '请求失败'}`
+        // 失败的话把最后一条 user 消息从历史里移除，避免污染上下文
+        messages.pop()
         return
       }
 
       if (!stream) {
         const data = await res.json()
-        output.textContent = data.choices?.[0]?.message?.content ?? JSON.stringify(data, null, 2)
+        const content = data.choices?.[0]?.message?.content ?? JSON.stringify(data, null, 2)
+        aiBody.textContent = content
+        aiBody.classList.remove('streaming')
+        messages.push({ role: 'assistant', content })
         return
       }
 
       // SSE 流式
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
+      let fullContent = ''
 
       while (true) {
         const { done, value } = await reader.read()
@@ -339,17 +421,23 @@
           try {
             const json = JSON.parse(payload)
             const delta = json.choices?.[0]?.delta?.content
-            if (delta) output.textContent += delta
+            if (delta) {
+              fullContent += delta
+              aiBody.textContent = fullContent
+              aiBody.closest('.conversation').scrollTop = 99999
+            }
           } catch {}
         }
       }
-    } catch (e) {
-      output.textContent = `✗ 请求失败: ${e.message}`
-    }
-  }
 
-  function clearOutput() {
-    document.getElementById('chatOutput').innerHTML = '<span class="thinking">等待发送...</span>'
+      aiBody.classList.remove('streaming')
+      messages.push({ role: 'assistant', content: fullContent })
+
+    } catch (e) {
+      aiBody.closest('.msg').className = 'msg err'
+      aiBody.textContent = `请求失败: ${e.message}`
+      messages.pop()
+    }
   }
 </script>
 
