@@ -128,6 +128,52 @@
     }
     .token-bar span { color: #3fb950; word-break: break-all; flex: 1; }
 
+    .models-bar {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .models-bar-title {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #8b949e;
+      white-space: nowrap;
+    }
+
+    .model-status {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+    }
+
+    .model-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .model-dot.healthy   { background: #3fb950; box-shadow: 0 0 4px #3fb95088; }
+    .model-dot.open      { background: #f85149; box-shadow: 0 0 4px #f8514988; }
+    .model-dot.half_open { background: #d29922; box-shadow: 0 0 4px #d2992288; }
+    .model-dot.unknown   { background: #8b949e; }
+
+    .model-status-name  { color: #c9d1d9; }
+    .model-status-state { font-size: 10px; }
+    .model-status-state.healthy   { color: #3fb950; }
+    .model-status-state.open      { color: #f85149; }
+    .model-status-state.half_open { color: #d29922; }
+    .model-status-state.unknown   { color: #8b949e; }
+
     /* 对话区 */
     .conversation {
       background: #0d1117;
@@ -194,6 +240,12 @@
   <button onclick="clearToken()">清除</button>
 </div>
 
+<!-- 模型健康状态栏 -->
+<div class="models-bar" id="modelsBar">
+  <span class="models-bar-title">Models</span>
+  <span style="color:#8b949e;font-size:11px;">连接中...</span>
+</div>
+
 <div class="panels">
 
   <!-- 注册 -->
@@ -258,6 +310,32 @@
   const BASE = 'http://localhost:8080'
   let token = ''
   let messages = []   // 多轮对话历史
+
+  // 模型状态轮询
+  const STATE_LABEL = { healthy: '正常', open: '熔断', half_open: '试探中', unknown: '未知' }
+
+  async function fetchModels() {
+    try {
+      const res = await fetch(`${BASE}/models`)
+      if (!res.ok) return
+      const data = await res.json()
+      const bar = document.getElementById('modelsBar')
+      bar.innerHTML = '<span class="models-bar-title">Models</span>'
+      for (const [name, state] of Object.entries(data)) {
+        const item = document.createElement('div')
+        item.className = 'model-status'
+        item.innerHTML = `
+          <div class="model-dot ${state}"></div>
+          <span class="model-status-name">${name}</span>
+          <span class="model-status-state ${state}">${STATE_LABEL[state] ?? state}</span>
+        `
+        bar.appendChild(item)
+      }
+    } catch {}
+  }
+
+  fetchModels()
+  setInterval(fetchModels, 3000)
 
   // Enter 发送（Shift+Enter 换行）
   function handleKey(e) {
