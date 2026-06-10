@@ -47,32 +47,41 @@ func (h *Handler) Handle(ctx *gin.Context) {
 		return
 	}
 
-	if !cb.Allow() {
-		// 提示用户切换模型
-		ctx.JSON(http.StatusServiceUnavailable, gin.H{"error": "模型熔断"})
-		return
+	var resp *http.Response
+	for cb.Allow() {
+		// 构建上游请求
+		req, err := buildRequest(ctx, body, model)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// 转发响应, 等待响应
+		resp, err = h.client.Do(req)
+		if err != nil {
+			cb.ReportFailure()
+			resp = nil
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+		if resp.StatusCode >= 500 {
+			resp.Body.Close()
+			cb.ReportFailure()
+			resp = nil
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+
+		cb.ReportSuccess()
+		break
 	}
 
-	// 构建上游请求
-	req, err := buildRequest(ctx, body, model)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("build request: %v", err)})
-		return
-	}
-	// 转发响应, 等待响应
-	resp, err := h.client.Do(req)
-	if err != nil {
-		// 连不上模型
-		cb.ReportFailure()
-		ctx.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("upstream: %v", err)})
+	if resp == nil {
+		ctx.JSON(http.StatusServiceUnavailable,
+			gin.H{"error": fmt.Sprintf("模型 %s 当前不可用，请切换其他模型", meta.Model)})
 		return
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 500 {
-		cb.ReportFailure() // 上游返回 5xx，算上游故障
-	} else {
-		cb.ReportSuccess() // 正常响应
-	}
 	forwardResponse(ctx, resp, meta.Stream)
 }
 
