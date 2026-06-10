@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -46,12 +47,14 @@ func (h *Handler) Register(c *gin.Context) {
 	if err := h.store.Create(c, user); err != nil {
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			zap.L().Warn("用户名已存在", zap.String("username", req.Username))
 			c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
+	zap.L().Info("用户注册成功", zap.String("username", req.Username), zap.Uint("id", uint(user.ID)))
 	c.JSON(http.StatusCreated, gin.H{"id": user.ID, "username": req.Username})
 }
 func (h *Handler) Login(c *gin.Context) {
@@ -65,10 +68,12 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 	u, err := h.store.FindByUsername(c, req.Username)
 	if err != nil {
+		zap.L().Warn("登录失败，用户不存在", zap.String("username", req.Username))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 		return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
+		zap.L().Warn("登录失败，密码错误", zap.String("username", req.Username))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 		return
 	}
@@ -77,5 +82,6 @@ func (h *Handler) Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
+	zap.L().Info("用户登录成功", zap.String("username", req.Username), zap.Uint("id", uint(u.ID)))
 	c.JSON(http.StatusOK, gin.H{"token": tokenStr})
 }

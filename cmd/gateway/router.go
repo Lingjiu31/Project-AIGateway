@@ -10,11 +10,12 @@ import (
 	"ai-gateway/internal/auth"
 	"ai-gateway/internal/middleware"
 	"ai-gateway/internal/proxy"
+	"ai-gateway/internal/router"
 	"ai-gateway/internal/user"
 )
 
 func setupRoutes(r *gin.Engine, manager *auth.Manager,
-	handler *proxy.Handler, userHandler *user.Handler, limiter middleware.Limiter) {
+	handler *proxy.Handler, userHandler *user.Handler, limiter middleware.Limiter, rt *router.Router) {
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:  []string{"*"},
@@ -27,6 +28,9 @@ func setupRoutes(r *gin.Engine, manager *auth.Manager,
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	r.GET("/models", func(c *gin.Context) {
+		c.JSON(http.StatusOK, rt.States())
 	})
 	r.POST("/v1/chat/completions",
 		middleware.Auth(manager),

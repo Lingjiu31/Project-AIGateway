@@ -51,7 +51,7 @@ func main() {
 	limiter := ratelimit.NewTokenBucketLimiter(rdb, cfg.RateLimit.Rate, cfg.RateLimit.Burst)
 
 	r := gin.New()
-	setupRoutes(r, manager, handler, userHandler, limiter)
+	setupRoutes(r, manager, handler, userHandler, limiter, rt)
 
 	zap.L().Info("服务启动", zap.Int("端口", cfg.Server.Port))
 	if err := r.Run(fmt.Sprintf(":%d", cfg.Server.Port)); err != nil {

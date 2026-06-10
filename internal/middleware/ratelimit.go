@@ -29,7 +29,7 @@ func RateLimit(limiter Limiter) gin.HandlerFunc {
 			return
 		}
 		if !allowed {
-			// 用户没有令牌了
+			zap.L().Warn("用户触发限流", zap.Any("userID", userID))
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
 			return
 		}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
+	"go.uber.org/zap"
 
 	"ai-gateway/internal/config"
 )
@@ -43,12 +44,15 @@ func (h *Handler) Handle(ctx *gin.Context) {
 	// 查看是否选择了模型
 	model, cb, err := h.router.Get(meta.Model)
 	if err != nil {
+		zap.L().Warn("请求了未知模型", zap.String("model", meta.Model))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	var resp *http.Response
+	attempt := 0
 	for cb.Allow() {
+		attempt++
 		// 构建上游请求
 		req, err := buildRequest(ctx, body, model)
 		if err != nil {
@@ -59,12 +63,22 @@ func (h *Handler) Handle(ctx *gin.Context) {
 		// 转发响应, 等待响应
 		resp, err = h.client.Do(req)
 		if err != nil {
+			zap.L().Warn("上游连接失败，准备重试",
+				zap.String("model", meta.Model),
+				zap.Int("attempt", attempt),
+				zap.Error(err),
+			)
 			cb.ReportFailure()
 			resp = nil
 			time.Sleep(200 * time.Millisecond)
 			continue
 		}
 		if resp.StatusCode >= 500 {
+			zap.L().Warn("上游返回错误状态，准备重试",
+				zap.String("model", meta.Model),
+				zap.Int("attempt", attempt),
+				zap.Int("status", resp.StatusCode),
+			)
 			resp.Body.Close()
 			cb.ReportFailure()
 			resp = nil
@@ -77,6 +91,10 @@ func (h *Handler) Handle(ctx *gin.Context) {
 	}
 
 	if resp == nil {
+		zap.L().Warn("所有重试均失败",
+			zap.String("model", meta.Model),
+			zap.Int("attempts", attempt),
+		)
 		ctx.JSON(http.StatusServiceUnavailable,
 			gin.H{"error": fmt.Sprintf("模型 %s 当前不可用，请切换其他模型", meta.Model)})
 		return

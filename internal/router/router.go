@@ -20,7 +20,7 @@ func NewRouter(models []config.ModelConfig, cbCfg config.CircuitBreakerConfig) *
 	}
 	for _, model := range models {
 		r.models[model.Name] = model
-		r.breakers[model.Name] = breaker.New(cbCfg.MaxFailures, time.Duration(cbCfg.TimeoutSeconds)*time.Second)
+		r.breakers[model.Name] = breaker.New(model.Name, cbCfg.MaxFailures, time.Duration(cbCfg.TimeoutSeconds)*time.Second)
 	}
 	return r
 }
@@ -32,4 +32,13 @@ func (r *Router) Get(name string) (config.ModelConfig, *breaker.CircuitBreaker, 
 		return config.ModelConfig{}, nil, fmt.Errorf("未知模型: %s", name)
 	}
 	return model, r.breakers[name], nil
+}
+
+// States 返回所有模型当前的熔断器状态
+func (r *Router) States() map[string]string {
+	result := make(map[string]string, len(r.breakers))
+	for name, cb := range r.breakers {
+		result[name] = cb.State().String()
+	}
+	return result
 }
