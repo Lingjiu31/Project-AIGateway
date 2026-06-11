@@ -3,10 +3,23 @@ server:
 
 upstream:
   models:
-    - name: deepseek
+    # DeepSeek Flash — 速度快，适合日常对话
+    - name: deepseek-flash
       base_url: "https://api.deepseek.com"
       api_key: "your-deepseek-api-key"
       model: "deepseek-chat"
+
+    # DeepSeek Pro — 效果更强，适合复杂推理
+    - name: deepseek-pro
+      base_url: "https://api.deepseek.com"
+      api_key: "your-deepseek-api-key"
+      model: "deepseek-reasoner"
+
+    # 智谱 GLM
+    - name: glm
+      base_url: "https://open.bigmodel.cn/api/paas/v4"
+      api_key: "your-glm-api-key"
+      model: "glm-4-flash"
 
 redis:
   addr: "localhost:6379"
@@ -17,8 +30,13 @@ mysql:
   dsn: "root:password@tcp(localhost:3306)/ai_gateway?charset=utf8mb4&parseTime=True&loc=Local"
 
 jwt:
+  # 生产环境请替换为随机长字符串，可用 openssl rand -hex 32 生成
   secret: "your-jwt-secret-change-in-production"
 
 ratelimit:
-  rate: 10
-  burst: 20   
+  rate: 10   # 每秒恢复 10 个令牌
+  burst: 20  # 桶最大容量（允许短时突发）
+
+circuit_breaker:
+  max_failures: 3      # 连续失败 3 次触发熔断
+  timeout_seconds: 30  # 熔断后等 30 秒进入 HalfOpen
