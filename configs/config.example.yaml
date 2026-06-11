@@ -6,19 +6,19 @@ upstream:
     # DeepSeek Flash — 速度快，适合日常对话
     - name: deepseek-flash
       base_url: "https://api.deepseek.com"
-      api_key: "your-deepseek-api-key"
+      api_key_env: "DEEPSEEK_API_KEY"  # k8s 环境从此环境变量读取，本地开发改为 api_key: "your-key"
       model: "deepseek-chat"
 
     # DeepSeek Pro — 效果更强，适合复杂推理
     - name: deepseek-pro
       base_url: "https://api.deepseek.com"
-      api_key: "your-deepseek-api-key"
+      api_key_env: "DEEPSEEK_API_KEY"
       model: "deepseek-reasoner"
 
     # 智谱 GLM
     - name: glm
       base_url: "https://open.bigmodel.cn/api/paas/v4"
-      api_key: "your-glm-api-key"
+      api_key_env: "GLM_API_KEY"
       model: "glm-4-flash"
 
 redis:

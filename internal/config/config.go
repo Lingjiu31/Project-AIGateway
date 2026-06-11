@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/viper"
 )
@@ -25,10 +26,11 @@ type UpstreamConfig struct {
 }
 
 type ModelConfig struct {
-	Name    string `mapstructure:"name"`
-	BaseURL string `mapstructure:"base_url"`
-	APIKey  string `mapstructure:"api_key"`
-	Model   string `mapstructure:"model"`
+	Name      string `mapstructure:"name"`
+	BaseURL   string `mapstructure:"base_url"`
+	APIKey    string `mapstructure:"api_key"`     // 本地开发直接填值
+	APIKeyEnv string `mapstructure:"api_key_env"` // k8s 环境填环境变量名，优先级高于 api_key
+	Model     string `mapstructure:"model"`
 }
 
 type RedisConfig struct {
@@ -67,6 +69,18 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
+	}
+
+	// 如果模型配置了 api_key_env，从环境变量读取 APIKey 覆盖 yaml 中的值
+	// 本地开发：api_key_env 为空，直接用 yaml 中的 api_key
+	// k8s 部署：api_key_env 填环境变量名，APIKey 从容器环境变量读取
+	for i := range cfg.Upstream.Models {
+		model := &cfg.Upstream.Models[i]
+		if model.APIKeyEnv != "" {
+			if val := os.Getenv(model.APIKeyEnv); val != "" {
+				model.APIKey = val
+			}
+		}
 	}
 
 	return &cfg, nil
