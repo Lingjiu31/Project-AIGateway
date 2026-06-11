@@ -1,0 +1,22 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-gateway-hpa
+  namespace: default
+spec:
+  # 指定要控制哪个 Deployment
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-gateway
+
+  minReplicas: 2   # 最少保持 2 个副本，保证高可用
+  maxReplicas: 10  # 最多扩到 10 个，防止无限扩容
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60  # Pod 平均 CPU 超过 60% 就扩容

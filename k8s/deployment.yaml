@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-gateway
+  namespace: default
+  labels:
+    app: ai-gateway
+spec:
+  replicas: 2  # 初始 2 个副本，HPA 会在此基础上动态调整
+  selector:
+    matchLabels:
+      app: ai-gateway
+  template:
+    metadata:
+      labels:
+        app: ai-gateway
+    spec:
+      containers:
+        - name: ai-gateway
+          image: ai-gateway:latest
+          imagePullPolicy: IfNotPresent  # 本地镜像直接用，不去远程拉
+          ports:
+            - containerPort: 8080
+
+          # 从 Secret 注入敏感环境变量
+          env:
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-gateway-secret
+                  key: DEEPSEEK_API_KEY
+            - name: GLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-gateway-secret
+                  key: GLM_API_KEY
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ai-gateway-secret
+                  key: JWT_SECRET
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-gateway-secret
+                  key: MYSQL_PASSWORD
+
+          # 挂载 ConfigMap 中的配置文件到容器内
+          volumeMounts:
+            - name: ai-gateway-config
+              mountPath: /app/configs
+              readOnly: true
+
+          # 资源限制：HPA 依赖 requests 中的 CPU 值来计算扩缩容比例
+          resources:
+            requests:
+              cpu: "100m"     # 0.1 核，HPA 计算基准
+              memory: "128Mi"
+            limits:
+              cpu: "500m"     # 0.5 核上限，防止单 Pod 吃光资源
+              memory: "256Mi"
+
+          # Liveness Probe：容器挂了就重启
+          # 检测 /health 接口，连续失败 3 次认为容器已死
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10  # 启动后等 10 秒再开始检测
+            periodSeconds: 15        # 每 15 秒检测一次
+            failureThreshold: 3      # 连续失败 3 次才重启，避免抖动
+
+          # Readiness Probe：容器没准备好就不分流量
+          # 比 Liveness 更敏感，失败时从 Service 负载均衡中摘除
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 2
+
+      volumes:
+        - name: ai-gateway-config
+          configMap:
+            name: ai-gateway-config
+            items:
+              - key: config.yaml
+                path: config.yaml

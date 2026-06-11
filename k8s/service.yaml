@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-gateway-service
+  namespace: default
+spec:
+  selector:
+    app: ai-gateway  # 匹配 Deployment 中 Pod 的 label
+  type: NodePort
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80          # Service 对外暴露的端口
+      targetPort: 8080  # 转发到 Pod 的 8080
+      nodePort: 30080   # 宿主机端口，通过 localhost:30080 访问

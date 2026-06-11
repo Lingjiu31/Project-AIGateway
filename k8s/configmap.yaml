@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-gateway-config
+  namespace: default
+# ⚠️  已知问题：ConfigMap 中的 ${DEEPSEEK_API_KEY} 等占位符在当前实现下不会被自动替换。
+# 原因：k8s 不会解析 ${} 语法，Go 程序读到的是字面字符串而非真实密钥。
+#
+# 正确做法（生产环境）：
+#   1. ConfigMap 只保留非敏感配置（端口、限流参数、熔断参数等）
+#   2. api_key / jwt.secret / mysql.dsn 等敏感字段从 ConfigMap 中删除
+#   3. 在 deployment.yaml 中通过 secretKeyRef 将 Secret 注入为环境变量
+#   4. Go 代码中用 os.Getenv("DEEPSEEK_API_KEY") 读取环境变量，
+#      或使用 viper.BindEnv() 将环境变量绑定到配置项
+data:
+  # 非敏感配置放 ConfigMap，敏感信息（API Key、JWT Secret）放 Secret
+  config.yaml: |
+    server:
+      port: 8080
+
+    # 非敏感配置：端口、Redis、限流、熔断
+    # 敏感配置（api_key、jwt.secret、mysql.dsn）通过环境变量注入，见 deployment.yaml 的 env 字段
+
+    upstream:
+      models:
+        # api_key 不在此处配置，由 os.Getenv("DEEPSEEK_API_KEY") 读取
+        - name: deepseek-flash
+          base_url: "https://api.deepseek.com"
+          model: "deepseek-chat"
+
+        - name: deepseek-pro
+          base_url: "https://api.deepseek.com"
+          model: "deepseek-reasoner"
+
+        - name: glm
+          base_url: "https://open.bigmodel.cn/api/paas/v4"
+          model: "glm-4-flash"
+
+    redis:
+      addr: "redis-service:6379"
+      password: ""
+      db: 0
+
+    # mysql.dsn 和 jwt.secret 包含敏感信息，由环境变量注入，不在此处配置
+
+    ratelimit:
+      rate: 10
+      burst: 20
+
+    circuit_breaker:
+      max_failures: 3
+      timeout_seconds: 30
