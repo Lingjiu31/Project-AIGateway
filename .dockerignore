@@ -1,0 +1,17 @@
+# 版本控制与 IDE
+.git
+.idea
+
+# 关键：含真实 API Key 的配置不进镜像层，运行时通过 -v 挂载或 ConfigMap 注入
+configs/config.yaml
+
+# go.work 是本机多模块工作区文件，进容器会干扰构建
+go.work
+go.work.sum
+
+# 与镜像无关的内容
+k8s
+test
+*.md
+Dockerfile
+.dockerignore
